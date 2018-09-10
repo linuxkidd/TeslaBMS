@@ -6,7 +6,7 @@
 #define SERIALCONSOLE   SerialUSB
 
 //Define this to be the serial port the Tesla BMS modules are connected to.
-//On the Due you need to use a USART port (Serial1, Serial2, Serial3) and update the call to serialSpecialInit if not Serial1
+//On the Due you need to use a UART port (Serial1, Serial2, Serial3) and update the call to serialSpecialInit if not Serial1
 #define SERIAL  Serial1
 
 #define REG_DEV_STATUS      0
@@ -52,7 +52,6 @@ typedef struct {
     uint8_t version;
     uint8_t checksum;
     uint32_t canSpeed;
-    uint8_t batteryID;  //which battery ID should this board associate as on the CAN bus
     uint8_t logLevel;
     float OverVSetpoint;
     float UnderVSetpoint;

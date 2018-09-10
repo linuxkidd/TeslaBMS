@@ -49,9 +49,9 @@ void SerialConsole::init() {
     state = STATE_ROOT_MENU;
     loopcount=0;
     cancel=false;
-    printPrettyDisplay = false;
+    printPrettyDisplay = true;
     prettyCounter = 0;
-    whichDisplay = 0;
+    whichDisplay = 2;
 }
 
 void SerialConsole::loop() {  
@@ -63,6 +63,7 @@ void SerialConsole::loop() {
         prettyCounter = millis();
         if (whichDisplay == 0) bms.printPackSummary();
         if (whichDisplay == 1) bms.printPackDetails();
+        if (whichDisplay == 2) bms.printPackDetailsCondensed();
     }
 }
 
@@ -83,8 +84,6 @@ void SerialConsole::printMenu() {
     Logger::console("   d = Toggle output of pack details every 3 seconds");
 
     Logger::console("   LOGLEVEL=%i - set log level (0=debug, 1=info, 2=warn, 3=error, 4=off)", Logger::getLogLevel());
-    Logger::console("   CANSPEED=%i - set first CAN bus speed", settings.canSpeed);
-    Logger::console("   BATTERYID=%i - Set battery ID for CAN protocol (1-14)", settings.batteryID);
 
     Logger::console("\nBATTERY MANAGEMENT CONTROLS\n");
     Logger::console("   VOLTLIMHI=%f - High limit for cells in volts", settings.OverVSetpoint);
@@ -168,14 +167,7 @@ void SerialConsole::handleConfigCmd() {
 
     cmdString.toUpperCase();
 
-    if (cmdString == String("CANSPEED")) {
-        if (newValue >= 33000 && newValue <= 1000000) {
-            settings.canSpeed = newValue;
-            Logger::console("Setting CAN speed to %i", newValue);
-            needEEPROMWrite = true;
-        }
-        else Logger::console("Invalid speed. Enter a value between 33000 and 1000000");
-    } else if (cmdString == String("LOGLEVEL")) {
+    if (cmdString == String("LOGLEVEL")) {
         switch (newValue) {
         case 0:
             Logger::setLoglevel(Logger::Debug);
@@ -204,14 +196,6 @@ void SerialConsole::handleConfigCmd() {
             break;
         } 
         needEEPROMWrite = true;
-    } else if (cmdString == String("BATTERYID")) {
-        if (newValue > 0 && newValue < 15) {
-            settings.batteryID = newValue;
-            bms.setBatteryID();
-            needEEPROMWrite = true;
-            Logger::console("Battery ID set to: %i", newValue);
-        }
-        else Logger::console("Invalid battery ID. Please enter a value between 1 and 14");
     } else if (cmdString == String("VOLTLIMHI")) {
         if (newFloat >= 0.0f && newFloat <= 6.00f) {
             settings.OverVSetpoint = newFloat; 
@@ -301,7 +285,7 @@ void SerialConsole::handleShortCmd() {
             printPrettyDisplay = !printPrettyDisplay;
             if (printPrettyDisplay)
             {
-                Logger::console("Enabling pack summary display, 5 second interval");
+                Logger::console("Enabling pack summary display, 3 second interval");
             }
             else
             {
@@ -317,7 +301,7 @@ void SerialConsole::handleShortCmd() {
             whichDisplay = 1;
             if (printPrettyDisplay)
             {
-                Logger::console("Enabling pack details display, 5 second interval");
+                Logger::console("Enabling pack details display, 3 second interval");
             }
             else
             {
@@ -325,59 +309,22 @@ void SerialConsole::handleShortCmd() {
             }
         }
         break;
+    case 'c':
+        if (whichDisplay == 0 && printPrettyDisplay) whichDisplay = 2;
+        else
+        {
+            printPrettyDisplay = !printPrettyDisplay;
+            whichDisplay = 2;
+            if (printPrettyDisplay)
+            {
+                Logger::console("Enabling pack Condensed details display, 3 second interval");
+            }
+            else
+            {
+                Logger::console("No longer displaying pack Condensed details.");
+            }
+        }
+        break;
     }
 }
 
-/*
-    if (SERIALCONSOLE.available()) 
-    {
-        char y = SERIALCONSOLE.read();
-        switch (y)
-        {
-        case '1': //ascii 1
-            renumberBoardIDs();  // force renumber and read out
-            break;
-        case '2': //ascii 2
-            SERIALCONSOLE.println();
-            findBoards();
-            break;
-        case '3': //activate cell balance for 5 seconds 
-            SERIALCONSOLE.println();
-            SERIALCONSOLE.println("Balancing");
-            cellBalance();
-            break;
-      case '4': //clear all faults on all boards, required after Reset or FPO (first power on)
-       SERIALCONSOLE.println();
-       SERIALCONSOLE.println("Clearing Faults");
-       clearFaults();
-      break;
-
-      case '5': //read out the status of first board
-       SERIALCONSOLE.println();
-       SERIALCONSOLE.println("Reading status");
-       readStatus(1);
-      break;
-
-      case '6': //Read out the limit setpoints of first board
-       SERIALCONSOLE.println();
-       SERIALCONSOLE.println("Reading Setpoints");
-       readSetpoint(1);
-       SERIALCONSOLE.println(OVolt);
-       SERIALCONSOLE.println(UVolt);
-       SERIALCONSOLE.println(Tset);
-      break; 
-
-      case '0': //Send all boards into Sleep state
-       Serial.println();
-       Serial.println("Sleep Mode");
-       sleepBoards();
-      break;
-
-      case '9'://Pull all boards out of Sleep state
-       Serial.println();
-       Serial.println("Wake Boards");
-       wakeBoards();
-      break;
-        }
-    }
- */

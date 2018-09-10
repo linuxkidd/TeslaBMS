@@ -16,13 +16,13 @@ public:
     void wakeBoards();
     void getAllVoltTemp();
     void readSetpoints();
-    void setBatteryID();
     float getPackVoltage();
     float getAvgTemperature();
     float getAvgCellVolt();
-    void processCANMsg(CAN_FRAME &frame);
+    float getAvgPackVolt();
     void printPackSummary();
     void printPackDetails();
+    void printPackDetailsCondensed();
 
 private:
     float packVolt;                         // All modules added together
@@ -33,9 +33,4 @@ private:
     BMSModule modules[MAX_MODULE_ADDR + 1]; // store data for as many modules as we've configured for.
     int numFoundModules;                    // The number of modules that seem to exist
     bool isFaulted;
-    
-    void sendBatterySummary();
-    void sendModuleSummary(int module);
-    void sendCellDetails(int module, int cell);
-    
 };

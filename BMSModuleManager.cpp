@@ -282,6 +282,18 @@ float BMSModuleManager::getAvgCellVolt()
     return avg;
 }
 
+float BMSModuleManager::getAvgPackVolt()
+{
+    float avg = 0.0f;    
+    for (int x = 1; x <= MAX_MODULE_ADDR; x++)
+    {
+        if (modules[x].isExisting()) avg += modules[x].getModuleVoltage();
+    }
+    avg = avg / (float)numFoundModules;
+
+    return avg;
+}
+
 void BMSModuleManager::printPackSummary()
 {
     uint8_t faults;
@@ -296,7 +308,7 @@ void BMSModuleManager::printPackSummary()
     if (isFaulted) Logger::console("                                       FAULTED!");
     else Logger::console("                                   All systems go!");
     Logger::console("Modules: %i    Voltage: %fV   Avg Cell Voltage: %fV     Avg Temp: %fC ", numFoundModules, 
-                    getPackVoltage(),getAvgCellVolt(), getAvgTemperature());
+                    getAvgPackVolt(),getAvgCellVolt(), getAvgTemperature());
     Logger::console("");
     for (int y = 1; y < 63; y++)
     {
@@ -425,7 +437,7 @@ void BMSModuleManager::printPackDetails()
     if (isFaulted) Logger::console("                                           FAULTED!");
     else Logger::console("                                      All systems go!");
     Logger::console("Modules: %i    Voltage: %fV   Avg Cell Voltage: %fV     Avg Temp: %fC ", numFoundModules, 
-                    getPackVoltage(),getAvgCellVolt(), getAvgTemperature());
+                    getAvgPackVolt(),getAvgCellVolt(), getAvgTemperature());
     Logger::console("");
     for (int y = 1; y < 63; y++)
     {
@@ -462,120 +474,41 @@ void BMSModuleManager::printPackDetails()
     }
 }
 
-void BMSModuleManager::processCANMsg(CAN_FRAME &frame)
+void BMSModuleManager::printPackDetailsCondensed()
 {
-    uint8_t battId = (frame.id >> 16) & 0xF;
-    uint8_t moduleId = (frame.id >> 8) & 0xFF;
-    uint8_t cellId = (frame.id) & 0xFF;
-    
-    if (moduleId = 0xFF)  //every module
+    uint8_t faults;
+    uint8_t alerts;
+    uint8_t COV;
+    uint8_t CUV;
+    int cellNum = 0;
+
+    Logger::console("STAT,%i,%i,%f,%f,%f",isFaulted, numFoundModules, getAvgPackVolt(), getAvgCellVolt(), getAvgTemperature());
+    for (int y = 1; y < 63; y++)
     {
-        if (cellId == 0xFF) sendBatterySummary();        
-        else 
+        if (modules[y].isExisting())
         {
-            for (int i = 1; i <= MAX_MODULE_ADDR; i++) 
+            faults = modules[y].getFaults();
+            alerts = modules[y].getAlerts();
+            COV = modules[y].getCOVCells();
+            CUV = modules[y].getCUVCells();
+
+            SerialUSB.print("Module,");
+            SerialUSB.print(y);
+            SerialUSB.print(",");
+            SerialUSB.print(modules[y].getModuleVoltage());
+            for (int i = 0; i < 6; i++)
             {
-                if (modules[i].isExisting()) 
-                {
-                    sendCellDetails(i, cellId);
-                    delayMicroseconds(500);
-                }
+                SerialUSB.print(",");
+                SerialUSB.print(modules[y].getCellVoltage(i));
+                SerialUSB.print(",");
+                SerialUSB.print(modules[y].getBalancingState(i));
             }
+            SerialUSB.print(",");
+            SerialUSB.print(modules[y].getTemperature(0));
+            SerialUSB.print(",");
+            SerialUSB.println(modules[y].getTemperature(1)); 
         }
     }
-    else //a specific module
-    {
-        if (cellId == 0xFF) sendModuleSummary(moduleId);
-        else sendCellDetails(moduleId, cellId);
-    }
 }
 
-void BMSModuleManager::sendBatterySummary()
-{
-    CAN_FRAME outgoing;
-    outgoing.id = (0x1BA00000ul) + ((settings.batteryID & 0xF) << 16) + 0xFFFF;
-    outgoing.rtr = 0;
-    outgoing.priority = 1;
-    outgoing.extended = true;
-    outgoing.length = 8;
-
-    uint16_t battV = uint16_t(getPackVoltage() * 100.0f);
-    outgoing.data.byte[0] = battV & 0xFF;
-    outgoing.data.byte[1] = battV >> 8;
-    outgoing.data.byte[2] = 0;  //instantaneous current. Not measured at this point
-    outgoing.data.byte[3] = 0;
-    outgoing.data.byte[4] = 50; //state of charge
-    int avgTemp = (int)getAvgTemperature() + 40;
-    if (avgTemp < 0) avgTemp = 0;
-    outgoing.data.byte[5] = avgTemp;
-    avgTemp = (int)lowestPackTemp + 40;
-    if (avgTemp < 0) avgTemp = 0;    
-    outgoing.data.byte[6] = avgTemp;
-    avgTemp = (int)highestPackTemp + 40;
-    if (avgTemp < 0) avgTemp = 0;
-    outgoing.data.byte[7] = avgTemp;
-    Can0.sendFrame(outgoing);
-}
-
-void BMSModuleManager::sendModuleSummary(int module)
-{
-    CAN_FRAME outgoing;
-    outgoing.id = (0x1BA00000ul) + ((settings.batteryID & 0xF) << 16) + ((module & 0xFF) << 8) + 0xFF;
-    outgoing.rtr = 0;
-    outgoing.priority = 1;
-    outgoing.extended = true;
-    outgoing.length = 8;
-
-    uint16_t battV = uint16_t(modules[module].getModuleVoltage() * 100.0f);
-    outgoing.data.byte[0] = battV & 0xFF;
-    outgoing.data.byte[1] = battV >> 8;
-    outgoing.data.byte[2] = 0;  //instantaneous current. Not measured at this point
-    outgoing.data.byte[3] = 0;
-    outgoing.data.byte[4] = 50; //state of charge
-    int avgTemp = (int)modules[module].getAvgTemp() + 40;
-    if (avgTemp < 0) avgTemp = 0;
-    outgoing.data.byte[5] = avgTemp;
-    avgTemp = (int)modules[module].getLowestTemp() + 40;
-    if (avgTemp < 0) avgTemp = 0;
-    outgoing.data.byte[6] = avgTemp;
-    avgTemp = (int)modules[module].getHighestTemp() + 40;
-    if (avgTemp < 0) avgTemp = 0;
-    outgoing.data.byte[7] = avgTemp;
-
-    Can0.sendFrame(outgoing);
-}
-
-void BMSModuleManager::sendCellDetails(int module, int cell)
-{
-    CAN_FRAME outgoing;
-    outgoing.id = (0x1BA00000ul) + ((settings.batteryID & 0xF) << 16) + ((module & 0xFF) << 8) + (cell & 0xFF);
-    outgoing.rtr = 0;
-    outgoing.priority = 1;
-    outgoing.extended = true;
-    outgoing.length = 8;
-
-    uint16_t battV = uint16_t(modules[module].getCellVoltage(cell) * 100.0f);
-    outgoing.data.byte[0] = battV & 0xFF;
-    outgoing.data.byte[1] = battV >> 8;
-    battV = uint16_t(modules[module].getHighestCellVolt(cell) * 100.0f);
-    outgoing.data.byte[2] = battV & 0xFF;
-    outgoing.data.byte[3] = battV >> 8;
-    battV = uint16_t(modules[module].getLowestCellVolt(cell) * 100.0f);
-    outgoing.data.byte[4] = battV & 0xFF;
-    outgoing.data.byte[5] = battV >> 8;
-    int instTemp = modules[module].getHighTemp() + 40;
-    outgoing.data.byte[6] = instTemp; // should be nearest temperature reading not highest but this works too.
-    outgoing.data.byte[7] = 0; //Bit encoded fault data. No definitions for this yet.
-
-    Can0.sendFrame(outgoing);
-}
-
-//The SerialConsole actually sets the battery ID to a specific value. We just have to set up the CAN filter here to
-//match.
-void BMSModuleManager::setBatteryID()
-{
-    //Setup filter for direct access to our registered battery ID
-    uint32_t canID = (0xBAul << 20) + (((uint32_t)settings.batteryID & 0xF) << 16);
-    Can0.setRXFilter(0, canID, 0x1FFF0000ul, true);
-}
 

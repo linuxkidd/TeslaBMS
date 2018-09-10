@@ -7,7 +7,6 @@
 #include "SerialConsole.h"
 #include "BMSModuleManager.h"
 #include "SystemIO.h"
-#include <due_can.h>
 #include <due_wire.h>
 #include <Wire_EEPROM.h>
 
@@ -55,15 +54,13 @@ void loadSettings()
         Logger::console("Resetting to factory defaults");
         settings.version = EEPROM_VERSION;
         settings.checksum = 0;
-        settings.canSpeed = 500000;
-        settings.batteryID = 0x01; //in the future should be 0xFF to force it to ask for an address
-        settings.OverVSetpoint = 4.1f;
+        settings.OverVSetpoint = 4.15f;
         settings.UnderVSetpoint = 2.3f;
         settings.OverTSetpoint = 65.0f;
         settings.UnderTSetpoint = -10.0f;
         settings.balanceVoltage = 3.9f;
         settings.balanceHyst = 0.04f;
-        settings.logLevel = 2;
+        settings.logLevel = 4;
         EEPROM.write(EEPROM_PAGE, settings);
     }
     else {
@@ -73,20 +70,6 @@ void loadSettings()
     Logger::setLoglevel((Logger::LogLevel)settings.logLevel);
 }
 
-void initializeCAN()
-{
-    uint32_t id;
-    Can0.begin(settings.canSpeed);
-    if (settings.batteryID < 0xF)
-    {
-        //Setup filter for direct access to our registered battery ID
-        id = (0xBAul << 20) + (((uint32_t)settings.batteryID & 0xF) << 16);
-        Can0.setRXFilter(0, id, 0x1FFF0000ul, true);
-        //Setup filter for request for all batteries to give summary data
-        id = (0xBAul << 20) + (0xFul << 16);
-        Can0.setRXFilter(1, id, 0x1FFF0000ul, true);
-    }
-}
 
 void setup() 
 {
@@ -95,6 +78,7 @@ void setup()
     SERIALCONSOLE.println("Starting up!");
     SERIAL.begin(BMS_BAUD);
 #if defined (__arm__) && defined (__SAM3X8E__)
+    SERIALCONSOLE.println("Setting DUE Serial");
     serialSpecialInit(USART0, BMS_BAUD); //required for Due based boards as the stock core files don't support 612500 baud.
 #endif
 
@@ -103,8 +87,6 @@ void setup()
     pinMode(13, INPUT);
 
     loadSettings();
-    initializeCAN();
-
     systemIO.setup();
 
     bms.renumberBoardIDs();
@@ -114,12 +96,11 @@ void setup()
     lastUpdate = 0;
 
     bms.clearFaults();
+    SERIALCONSOLE.println("Finished Setup..");
 }
 
 void loop() 
 {
-    CAN_FRAME incoming;
-
     console.loop();
 
     if (millis() > (lastUpdate + 1000))
@@ -129,9 +110,5 @@ void loop()
         bms.getAllVoltTemp();
     }
 
-    if (Can0.available()) {
-        Can0.read(incoming);
-        bms.processCANMsg(incoming);
-    }
 }
 
