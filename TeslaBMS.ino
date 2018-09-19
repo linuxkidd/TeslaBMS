@@ -55,10 +55,10 @@ void loadSettings()
         settings.version = EEPROM_VERSION;
         settings.checksum = 0;
         settings.OverVSetpoint = 4.15f;
-        settings.UnderVSetpoint = 2.3f;
+        settings.UnderVSetpoint = 3.25f;
         settings.OverTSetpoint = 65.0f;
         settings.UnderTSetpoint = -10.0f;
-        settings.balanceVoltage = 3.9f;
+        settings.balanceVoltage = 4.05f;
         settings.balanceHyst = 0.04f;
         settings.logLevel = 4;
         EEPROM.write(EEPROM_PAGE, settings);
@@ -111,4 +111,3 @@ void loop()
     }
 
 }
-
